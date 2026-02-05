@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
 
-export default function LoginPage() {
+export default function LoginPage({ onNavigate, onAuthSuccess }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,7 +26,7 @@ export default function LoginPage() {
       }
 
       localStorage.setItem('token', data.access_token)
-      navigate('/')
+      onAuthSuccess?.()
     } catch (err) {
       setError('Network error - is the backend running?')
     } finally {
@@ -75,7 +73,16 @@ export default function LoginPage() {
         </form>
 
         <p className="auth-link">
-          Don't have an account? <Link to="/register">Sign up here</Link>
+          Don't have an account?{' '}
+          <a
+            href="/register"
+            onClick={(e) => {
+              e.preventDefault()
+              onNavigate('/register')
+            }}
+          >
+            Sign up here
+          </a>
         </p>
       </div>
     </div>

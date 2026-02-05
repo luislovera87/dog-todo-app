@@ -1,12 +1,10 @@
 import { useState } from 'react'
-import { useNavigate, Link } from 'react-router-dom'
 
-export default function RegisterPage() {
+export default function RegisterPage({ onNavigate, onAuthSuccess }) {
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [isLoading, setIsLoading] = useState(false)
-  const navigate = useNavigate()
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -28,7 +26,7 @@ export default function RegisterPage() {
       }
 
       localStorage.setItem('token', data.access_token)
-      navigate('/')
+      onAuthSuccess?.()
     } catch (err) {
       setError('Network error - is the backend running?')
     } finally {
@@ -75,7 +73,16 @@ export default function RegisterPage() {
         </form>
 
         <p className="auth-link">
-          Already have an account? <Link to="/login">Login here</Link>
+          Already have an account?{' '}
+          <a
+            href="/login"
+            onClick={(e) => {
+              e.preventDefault()
+              onNavigate('/login')
+            }}
+          >
+            Login here
+          </a>
         </p>
       </div>
     </div>

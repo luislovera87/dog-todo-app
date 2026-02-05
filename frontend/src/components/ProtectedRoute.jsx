@@ -1,11 +1,15 @@
-import { Navigate } from 'react-router-dom'
+import { useEffect } from 'react'
 
-export default function ProtectedRoute({ children }) {
+export default function ProtectedRoute({ children, onUnauthenticated }) {
   const token = localStorage.getItem('token')
 
-  if (!token) {
-    return <Navigate to="/login" replace />
-  }
+  useEffect(() => {
+    if (!token) {
+      onUnauthenticated?.()
+    }
+  }, [token, onUnauthenticated])
+
+  if (!token) return null
 
   return children
 }
