@@ -6,33 +6,40 @@ This file provides guidance to Claude Code when working with this Dog Todo App p
 
 The Dog Todo App is a fully implemented full-stack application with:
 - ✅ Backend: FastAPI + SQLAlchemy + SQLite
-- ✅ Frontend: React 18 + Vite
+- ✅ Frontend: React 18 + Vite + React Router
+- ✅ Authentication: JWT-based user login/registration
 - ✅ Testing: Pytest with >80% coverage
 - ✅ Documentation: README and API docs
 
 ## Project Structure Overview
 
 **Backend** (`backend/`):
-- `app/main.py` - FastAPI application, all routes
-- `app/models.py` - SQLAlchemy TodoItem model
-- `app/schemas.py` - Pydantic request/response schemas
+- `app/main.py` - FastAPI application, all routes (including auth endpoints)
+- `app/models.py` - SQLAlchemy User and TodoItem models
+- `app/schemas.py` - Pydantic request/response schemas (including auth)
 - `app/crud.py` - Database operations (create, read, update, delete, toggle)
+- `app/security.py` - JWT token and password hashing utilities
 - `app/database.py` - Database connection setup
 - `app/config.py` - Configuration
 
 **Frontend** (`frontend/`):
-- `src/main.jsx` - React entry point
-- `src/App.jsx` - Main React component, state management
+- `src/main.jsx` - React entry point with BrowserRouter
+- `src/App.jsx` - Main React component with auth routing
+- `src/pages/LoginPage.jsx` - User login form
+- `src/pages/RegisterPage.jsx` - User registration form
+- `src/components/ProtectedRoute.jsx` - Route wrapper for authenticated pages
 - `src/components/` - Reusable UI components (TodoForm, TodoItem, TodoList, DogAvatar)
-- `src/services/api.js` - Axios HTTP client
-- `src/App.css` - Component styles with dog theme
+- `src/services/api.js` - Axios HTTP client with JWT interceptors
+- `src/services/auth.js` - Authentication service (login, register, logout, token management)
+- `src/App.css` - Component styles with dog theme and auth pages
 - `src/index.css` - Global styles
 
 **Tests** (`backend/tests/`):
-- `test_api.py` - API endpoint tests
+- `test_auth.py` - Authentication security tests (JWT, password hashing, user CRUD)
+- `test_api.py` - API endpoint tests (with JWT authentication)
 - `test_crud.py` - CRUD operation tests
 - `test_models.py` - SQLAlchemy model tests
-- `conftest.py` - Pytest fixtures
+- `conftest.py` - Pytest fixtures including auth helpers
 
 ## Build and Development Commands
 
@@ -81,10 +88,28 @@ npm run preview
 
 **Key Features**:
 - **CORS**: Enabled for frontend-to-backend communication
+- **Authentication**: JWT-based stateless auth with 24-hour token expiry
 - **Validation**: Pydantic schemas enforce data integrity
 - **Database**: SQLite with automatic migrations via SQLAlchemy
 - **Testing**: Comprehensive unit tests with fixtures
-- **Error Handling**: Proper HTTP status codes (200, 201, 404, 422)
+- **Error Handling**: Proper HTTP status codes (200, 201, 401, 404, 422)
+
+## Core Dependencies
+
+**Backend**:
+- `fastapi` - Web framework
+- `sqlalchemy` - ORM and database
+- `pydantic` - Data validation
+- `python-jose[cryptography]` - JWT token generation/validation
+- `passlib[argon2-cffi]` - Password hashing with Argon2
+- `python-multipart` - Form data parsing
+
+**Frontend**:
+- `react` - UI library
+- `react-dom` - React bindings
+- `react-router-dom` - Client-side routing (v6+)
+- `axios` - HTTP client
+- `vite` - Build tool and dev server
 
 ## API Specification
 
@@ -112,9 +137,42 @@ In the UI, priority levels are displayed with dog-themed language:
 - `medium` → "Walk-worthy"
 - `high` → "Treat-worthy"
 
+## Authentication
+
+All todo operations require authentication. Users must register and login to access the app.
+
+### Auth Endpoints
+- `POST /auth/register` - Create new user account with username/password
+- `POST /auth/login` - Login and receive JWT token
+- Both return: `{ "access_token": "...", "token_type": "bearer" }`
+
+### JWT Token Details
+- **Expiration**: 24 hours (auto-logout on inactivity)
+- **Storage**: Browser localStorage as key `token`
+- **Usage**: Add header `Authorization: Bearer <token>` to all requests
+- **Validation**: Invalid/expired tokens return 401, redirect to login
+- **Hash Algorithm**: Argon2 (via passlib)
+
+### Frontend Routes
+- `/login` - Login page (redirects to home if already authenticated)
+- `/register` - Registration page (username and password, duplicate username validation)
+- `/` - Todo app dashboard (protected, requires valid token)
+
+### Protected Requests
+All todo endpoints (`GET /todos`, `POST /todos`, `PUT /todos/{id}`, `DELETE /todos/{id}`, `PATCH /todos/{id}/toggle`) require:
+1. Valid JWT token in Authorization header
+2. User can only see/modify their own todos (filtered by user_id)
+
 ## Data Model
 
 **Database**: SQLite file-based storage at `backend/dog_todos.db` (auto-created on first run)
+
+**User** SQLAlchemy model fields:
+- `id` - Integer primary key
+- `username` - String, unique, required
+- `password_hash` - String (Argon2 hashed), required
+- `created_at` - Timestamp (auto-generated)
+- Relationship: `todos` - List of TodoItem records owned by user
 
 **TodoItem** SQLAlchemy model fields:
 - `id` - Integer primary key
@@ -126,8 +184,13 @@ In the UI, priority levels are displayed with dog-themed language:
 - `due_date` - Optional datetime
 - `created_at` - Timestamp (auto-generated)
 - `updated_at` - Timestamp (auto-updated)
+- `user_id` - Foreign key to User (required, indexed)
+- Relationship: `owner` - User who owns this todo
 
 **Pydantic Schemas**:
+- `UserCreate` - Request: { "username": string, "password": string }
+- `UserResponse` - Response: { "id": int, "username": string, "created_at": datetime }
+- `Token` - Response: { "access_token": string, "token_type": "bearer" }
 - `TodoCreate` - Request body for POST /todos
 - `TodoUpdate` - Request body for PUT /todos/{id}
 - `TodoResponse` - Response body for all endpoints
@@ -151,6 +214,20 @@ In the UI, priority levels are displayed with dog-themed language:
 2. Run test to confirm it fails
 3. Fix the code
 4. Verify test passes: `pytest -v`
+
+### Add a Protected API Endpoint
+1. Define Pydantic schema in `app/schemas.py`
+2. Add CRUD function in `app/crud.py` that accepts `user_id`
+3. Add route in `app/main.py` with `current_user: User = Depends(get_current_user)` parameter
+4. Filter query by `user_id` to ensure data isolation
+5. Add tests in `backend/tests/test_api.py` with valid JWT token
+
+**Example**:
+```python
+@app.post("/api/todos")
+def create_todo(todo: TodoCreate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return crud.create_todo(db, todo, current_user.id)
+```
 
 ### Add Frontend Component
 1. Create component file in `src/components/`
@@ -189,11 +266,13 @@ pytest tests/test_api.py::test_create_todo -v
 ```
 
 **Test Summary**:
-- **Total Tests**: 33 across 3 test files
-  - test_api.py: 16 tests (API endpoints + filters + error handling)
+- **Total Tests**: 44 across 4 test files
+  - test_auth.py: 10 tests (JWT creation, password hashing, user CRUD, auth errors)
+  - test_api.py: 18 tests (API endpoints + filters + error handling + auth validation)
   - test_crud.py: 14 tests (CRUD operations at database level)
   - test_models.py: 3 tests (Model creation and defaults)
 - **Coverage Target**: >80% across all modules
+- **Auth Tests**: Verify JWT token generation, password hashing (Argon2), user lookup, duplicate username detection, 401 errors on missing/invalid tokens
 
 ## Performance Considerations
 
@@ -205,15 +284,24 @@ pytest tests/test_api.py::test_create_todo -v
 ## Important Files and Their Purposes
 
 ### Critical Files (Frequently Modified)
-1. `backend/app/main.py` - All API routes
-2. `backend/app/crud.py` - All database logic
-3. `frontend/src/App.jsx` - Main UI state and logic
-4. `frontend/src/components/TodoForm.jsx` - Task creation UI
+1. `backend/app/main.py` - All API routes (todos + auth)
+2. `backend/app/crud.py` - All database logic (CRUD + user management)
+3. `backend/app/security.py` - JWT and password utilities
+4. `frontend/src/App.jsx` - Main UI routing and auth flow
+5. `frontend/src/services/auth.js` - Frontend auth service
+6. `frontend/src/components/TodoForm.jsx` - Task creation UI
+
+### Auth-Specific Files
+1. `backend/app/models.py` - User + TodoItem models
+2. `backend/app/schemas.py` - Auth + Todo schemas
+3. `backend/tests/test_auth.py` - Auth utility tests
+4. `frontend/src/pages/LoginPage.jsx` - Login form
+5. `frontend/src/pages/RegisterPage.jsx` - Registration form
+6. `frontend/src/components/ProtectedRoute.jsx` - Route protection wrapper
 
 ### Supporting Files
-1. `backend/app/models.py` - Data structure
-2. `backend/app/schemas.py` - Request/response validation
-3. `backend/tests/test_api.py` - API verification
+1. `backend/tests/test_api.py` - API verification (with JWT)
+2. `backend/tests/conftest.py` - Test fixtures including auth helpers
 
 ## Deployment Considerations
 
@@ -263,9 +351,25 @@ pytest tests/test_api.py::test_create_todo -v
 - Reinstall dependencies: `pip install -r requirements.txt`
 - Check database permissions: `chmod 755 backend/`
 
+**Authentication errors (401/403)**
+- Verify token is in localStorage: check browser DevTools → Application → Local Storage
+- Check token expiry: tokens expire after 24 hours
+- Verify Authorization header: should be `Authorization: Bearer <token>`
+- Check backend logs for detailed error messages
+- Try registering and logging in fresh
+
+**CORS errors with auth requests**
+- Verify `/api/auth/register` and `/api/auth/login` endpoints are exposed
+- Check that CORS middleware in FastAPI includes credentials
+- Verify frontend API base URL matches backend host
+
+**Password hashing issues**
+- Uses Argon2 (via passlib), not bcrypt
+- Passwords must be < 1000 bytes (practical limit well above needed)
+- Test password hashing: `python -c "from app.security import hash_password; print(hash_password('test'))"`
+
 ## Next Steps / Future Enhancements
 
-- Add user authentication (JWT)
 - Implement recurring tasks
 - Add calendar view
 - Create email notifications
@@ -273,6 +377,9 @@ pytest tests/test_api.py::test_create_todo -v
 - Add search functionality
 - Implement soft deletes
 - Add audit logging
+- Add password reset/recovery flow
+- Implement email verification for registration
+- Add admin dashboard for user management
 
 ## Code Style and Conventions
 
