@@ -1,7 +1,8 @@
 from sqlalchemy.orm import Session
-from app.models import TodoItem, PriorityEnum
+from app.models import TodoItem, PriorityEnum, User
 from app.schemas import TodoCreate, TodoUpdate
 from typing import List, Optional
+from app.security import hash_password, verify_password
 
 def create_todo(db: Session, todo: TodoCreate) -> TodoItem:
     db_todo = TodoItem(
@@ -65,3 +66,20 @@ def toggle_todo_completion(db: Session, todo_id: int) -> Optional[TodoItem]:
     db.commit()
     db.refresh(db_todo)
     return db_todo
+
+def create_user(db: Session, username: str, password: str):
+    """Create a new user with hashed password."""
+    hashed_password = hash_password(password)
+    db_user = User(username=username, password_hash=hashed_password)
+    db.add(db_user)
+    db.commit()
+    db.refresh(db_user)
+    return db_user
+
+def get_user_by_username(db: Session, username: str):
+    """Retrieve a user by username."""
+    return db.query(User).filter(User.username == username).first()
+
+def get_user_by_id(db: Session, user_id: int):
+    """Retrieve a user by ID."""
+    return db.query(User).filter(User.id == user_id).first()
