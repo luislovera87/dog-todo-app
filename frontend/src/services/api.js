@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { authService } from './auth'
 
 const API_BASE_URL = '/api'
 
@@ -10,6 +11,27 @@ const api = axios.create({
   timeout: 5000,
 })
 
+// Add Authorization header to all requests
+api.interceptors.request.use((config) => {
+  const token = authService.getToken()
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`
+  }
+  return config
+})
+
+// Handle 401 errors by redirecting to login
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401) {
+      authService.logout()
+      window.location.href = '/login'
+    }
+    return Promise.reject(error)
+  }
+)
+
 export const fetchTodos = (filters = {}) => {
   const params = new URLSearchParams()
   if (filters.dog_name) params.append('dog_name', filters.dog_name)
@@ -17,8 +39,8 @@ export const fetchTodos = (filters = {}) => {
   if (filters.priority) params.append('priority', filters.priority)
 
   const queryString = params.toString()
-  const url = queryString ? `${API_BASE_URL}/todos?${queryString}` : `${API_BASE_URL}/todos`
-  return axios.get(url, { timeout: 5000 })
+  const path = queryString ? `/todos?${queryString}` : '/todos'
+  return api.get(path)
 }
 
 export const createTodo = (todoData) => {
