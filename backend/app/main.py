@@ -110,7 +110,7 @@ def get_todo(todo_id: int, db: Session = Depends(get_db), current_user: User = D
 @app.post("/api/todos", response_model=TodoResponse, status_code=201)
 def create_todo(todo: TodoCreate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """Create a todo for the current user."""
-    db_todo = TodoItem(**todo.dict(), user_id=current_user.id)
+    db_todo = TodoItem(**todo.model_dump(), user_id=current_user.id)
     db.add(db_todo)
     db.commit()
     db.refresh(db_todo)
