@@ -1,10 +1,12 @@
-from fastapi import FastAPI, Depends, HTTPException, Query
+from fastapi import FastAPI, Depends, HTTPException, Query, Header
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from app.database import engine, Base, get_db
-from app.models import PriorityEnum
-from app.schemas import TodoCreate, TodoUpdate, TodoResponse
+from app.models import PriorityEnum, User
+from app.schemas import TodoCreate, TodoUpdate, TodoResponse, UserCreate, Token
 from app import crud
+from app.security import create_access_token, verify_password, decode_token
+from typing import Optional
 
 # Create tables
 Base.metadata.create_all(bind=engine)
@@ -23,6 +25,27 @@ app.add_middleware(
 @app.get("/health")
 def health_check():
     return {"status": "ok"}
+
+@app.post("/api/auth/register", response_model=Token)
+def register(user_data: UserCreate, db: Session = Depends(get_db)):
+    """Register a new user."""
+    existing_user = crud.get_user_by_username(db, user_data.username)
+    if existing_user:
+        raise HTTPException(status_code=409, detail="Username already exists")
+
+    db_user = crud.create_user(db, user_data.username, user_data.password)
+    access_token = create_access_token({"sub": str(db_user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
+
+@app.post("/api/auth/login", response_model=Token)
+def login(user_data: UserCreate, db: Session = Depends(get_db)):
+    """Login with username and password."""
+    db_user = crud.get_user_by_username(db, user_data.username)
+    if not db_user or not verify_password(user_data.password, db_user.password_hash):
+        raise HTTPException(status_code=401, detail="Invalid username or password")
+
+    access_token = create_access_token({"sub": str(db_user.id)})
+    return {"access_token": access_token, "token_type": "bearer"}
 
 @app.get("/api/todos", response_model=list[TodoResponse])
 def list_todos(
