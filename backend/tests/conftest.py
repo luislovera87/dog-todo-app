@@ -33,6 +33,16 @@ def test_db():
     app.dependency_overrides.clear()
 
 @pytest.fixture(scope="function")
+def db(test_db):
+    """Provide a database session for tests."""
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=test_db)
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+@pytest.fixture(scope="function")
 def test_client(test_db):
     return TestClient(app)
 

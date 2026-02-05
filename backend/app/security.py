@@ -5,7 +5,7 @@ from jose import JWTError, jwt
 import os
 
 # Password hashing
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 # JWT configuration
 SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-secret-key-change-in-production")
